@@ -1,18 +1,16 @@
 package main
 
 import (
-	"bufio"
-	"crypto/sha256"
+	//"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net/http"
-	"os"
 	"os/user"
 	"strconv"
 	"strings"
 
-	"github.com/ghodss/yaml"
+	//"github.com/ghodss/yaml"
 	"github.com/golang/glog"
 	"k8s.io/api/admission/v1beta1"
 	admissionregistrationv1beta1 "k8s.io/api/admissionregistration/v1beta1"
@@ -42,7 +40,7 @@ var ignoredNamespaces = []string{
 }
 
 type WebhookServer struct {
-	sidecarConfig *Config
+	admConfig *patchv1beta1.Conf
 	server        *http.Server
 }
 
@@ -51,87 +49,20 @@ type WhSvrParameters struct {
 	port           int    // webhook server port
 	certFile       string // path to the x509 certificate for https
 	keyFile        string // path to the x509 private key matching `CertFile`
-	sidecarCfgFile string // path to sidecar injector configuration file
+	admCfgFile string // path to admission configuration file
 }
-
+/*
 type Config struct {
 	Containers []corev1.Container `yaml:"containers"`
 	Volumes    []corev1.Volume    `yaml:"volumes"`
 }
-
+*/
 func init() {
 	_ = corev1.AddToScheme(runtimeScheme)
 	_ = admissionregistrationv1beta1.AddToScheme(runtimeScheme)
 	// defaulting with webhooks:
 	// https://github.com/kubernetes/kubernetes/issues/57982
 	_ = v1.AddToScheme(runtimeScheme)
-}
-
-func loadConfig(configFile string) (*Config, error) {
-	data, err := ioutil.ReadFile(configFile)
-	if err != nil {
-		return nil, err
-	}
-	glog.Infof("New configuration: sha256sum %x", sha256.Sum256(data))
-
-	var cfg Config
-	if err := yaml.Unmarshal(data, &cfg); err != nil {
-		return nil, err
-	}
-
-	return &cfg, nil
-}
-
-func loadwtConfig(configFile string) (*map[string]int64, error) {
-	file, err := os.Open(configFile)
-	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
-
-	var m = make(map[string]int64)
-	fs := bufio.NewScanner(file)
-	for fs.Scan() {
-		line := fs.Text()
-		//use = to indicate the value is a number
-		if equal := strings.Index(line, "="); equal >= 0 {
-			if key := strings.TrimSpace(line[:equal]); len(key) > 0 {
-				var value int64
-				if len(line) > equal {
-					value, err = strconv.ParseInt(strings.TrimSpace(line[equal+1:]), 10, 64)
-				}
-				if err == nil {
-					m[key] = value
-				}
-			}
-		}
-	}
-
-	return &m, nil
-}
-
-func loadAllowedHPConfig(configFile string) (*map[string]string, error) {
-	file, err := os.Open(configFile)
-	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
-
-	var m = make(map[string]string)
-	fs := bufio.NewScanner(file)
-	for fs.Scan() {
-		line := fs.Text()
-		//use = to indicate the value is a number
-		if equal := strings.Index(line, ":"); equal >= 0 {
-			if key := strings.TrimSpace(line[:equal]); len(key) > 0 {
-				if len(strings.TrimSpace(line[equal+1:])) > 0 {
-					m[key] = strings.TrimSpace(line[equal+1:])
-				}
-			}
-		}
-	}
-
-	return &m, nil
 }
 
 func validationRequired(ignoredList []string, name, ns string) bool {
@@ -268,19 +199,15 @@ func (whsvr *WebhookServer) validate(ar *v1beta1.AdmissionReview) *v1beta1.Admis
 			}
 
 		}
-		//var volumes []corev1.Volume
-		//var allowedVolumes *map[string]string
-		allowedVolumes, err := loadAllowedHPConfig("/etc/admissionConfig/allowedHostpath")
-		if err != nil {
-			glog.Infof("error loading allowed volume config: %v", err)
-		}
+
 		for k, spec := range coninf.GetPodSpecs() {
 			for _, volume := range spec.Volumes {
 				glog.Infof("path:%v, Volumes: %v", k, volume.Name)
 				if volume.HostPath != nil {
 					//glog.Infof("req name: %v,path: %v",req.Name, volume.HostPath.Path )
 					found := false
-					for _, v := range *allowedVolumes {
+					//for _, v := range *allowedVolumes {
+					for _, v := range whsvr.admConfig.AllowedFileSystem {
 						if strings.HasPrefix(volume.HostPath.Path, v) {
 							found = true
 						}
@@ -361,7 +288,9 @@ func (whsvr *WebhookServer) mutate(ar *v1beta1.AdmissionReview) *v1beta1.Admissi
 	}
 
 	var patchBytes []byte
-	patchBytes, err = patchv1beta1.CreatePatch(coninf, uid, gids, req.UserInfo.Username)
+	usercfg := whsvr.admConfig.GetUserCfg(req.UserInfo.Username)
+	patchBytes, err = patchv1beta1.CreatePatch(coninf, uid, gids, req.UserInfo.Username, usercfg)
+	//patchBytes, err = patchv1beta1.CreatePatch(coninf, uid, gids, req.UserInfo.Username)
 	if err != nil {
 		return &v1beta1.AdmissionResponse{
 			Result: &metav1.Status{

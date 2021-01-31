@@ -146,9 +146,10 @@ func GetConIntf(req *v1beta1.AdmissionRequest) (conintf MyConIntf, err error) {
 }
 
 // CreatePatch creates mutation patchs
-func CreatePatch(contI MyConIntf, uid int64, gids []int64, username string) ([]byte, error) {
+func CreatePatch(contI MyConIntf, uid int64, gids []int64, username string, usercfg UserCfg) ([]byte, error) {
 	var patch []patchOperation
 
+	glog.Infof("usercfg:%+v\n", usercfg)
 	//patch = append(patch, updateAnnotation(pod.Annotations, annotations)...)
 	patch = append(patch, updateSecurityContext(contI, uid, gids)...)
 	patch = append(patch, updateLabel(contI, username)...)
