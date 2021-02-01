@@ -23,6 +23,7 @@ import (
 	//"github.com/fengpinghu/admissionctl/pkg/patch"
 	clientv1beta1 "github.com/fengpinghu/admissionctl/pkg/client/v1beta1"
 	patchv1beta1 "github.com/fengpinghu/admissionctl/pkg/patch/v1beta1"
+	vbv1alpha1 "volcano.sh/volcano/pkg/apis/batch/v1alpha1"
 )
 
 var (
@@ -41,16 +42,17 @@ var ignoredNamespaces = []string{
 
 type WebhookServer struct {
 	admConfig *patchv1beta1.Conf
-	server        *http.Server
+	server    *http.Server
 }
 
 // Webhook Server parameters
 type WhSvrParameters struct {
-	port           int    // webhook server port
-	certFile       string // path to the x509 certificate for https
-	keyFile        string // path to the x509 private key matching `CertFile`
+	port       int    // webhook server port
+	certFile   string // path to the x509 certificate for https
+	keyFile    string // path to the x509 private key matching `CertFile`
 	admCfgFile string // path to admission configuration file
 }
+
 /*
 type Config struct {
 	Containers []corev1.Container `yaml:"containers"`
@@ -198,6 +200,38 @@ func (whsvr *WebhookServer) validate(ar *v1beta1.AdmissionReview) *v1beta1.Admis
 				Allowed: true,
 			}
 
+		}
+		if req.Kind.Group == "batch.volcano.sh" && req.Kind.Kind == "Job" {
+			var job vbv1alpha1.Job
+			if err = json.Unmarshal(req.Object.Raw, &job); err != nil {
+				glog.Errorf("Could not unmarshal raw object: %v", err)
+				allowed = false
+				//var reason metav1.StatusReason
+				msg := fmt.Sprintf("Could not unmarshal raw obj: %v", err)
+				result = &metav1.Status{
+					Reason: metav1.StatusReason(msg),
+				}
+			} else {
+				usercfg := whsvr.admConfig.GetUserCfg(req.UserInfo.Username)
+				queueReq := job.Spec.Queue
+				queuesAllowed := usercfg.AllowedQueues
+				glog.Infof("queue request: %v, queue allowed: %v", queueReq, queuesAllowed)
+				found := false
+				for _, q := range queuesAllowed {
+					if queueReq == q {
+						found = true
+						break
+					}
+				}
+				if found == false {
+					allowed = false
+					msg := fmt.Sprintf("Access to queue: %v not allowed", queueReq)
+					result = &metav1.Status{
+						Reason: metav1.StatusReason(msg),
+					}
+
+				}
+			}
 		}
 
 		for k, spec := range coninf.GetPodSpecs() {

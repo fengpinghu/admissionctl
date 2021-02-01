@@ -11,7 +11,7 @@ import (
 type UserCfg struct {
         MaxWallTime   int64    `yaml:"maxWallTime,omitempty"`
         DefaultQueue  string   `yaml:"defaultQueue"`
-        Allowedqueues []string `yaml:"allowedQueues"`
+        AllowedQueues []string `yaml:"allowedQueues"`
 }
 
 type Conf struct {
@@ -29,8 +29,8 @@ func (c Conf) GetUserCfg(name string) UserCfg {
                 if u.DefaultQueue == "" {
                         u.DefaultQueue = c.UserDefault.DefaultQueue
                 }
-                if u.Allowedqueues == nil {
-                        u.Allowedqueues = c.UserDefault.Allowedqueues
+                if u.AllowedQueues == nil {
+                        u.AllowedQueues = c.UserDefault.AllowedQueues
                 }
 
         } else {
