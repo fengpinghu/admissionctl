@@ -10,6 +10,7 @@ import (
 
 type UserCfg struct {
         MaxWallTime   int64    `yaml:"maxWallTime,omitempty"`
+        MaxWallTimePod   int64    `yaml:"maxWallTime,omitempty"`
         DefaultQueue  string   `yaml:"defaultQueue"`
         AllowedQueues []string `yaml:"allowedQueues"`
 }
@@ -23,6 +24,9 @@ type Conf struct {
 func (c Conf) GetUserCfg(name string) UserCfg {
         u, ok := c.Users[name]
         if ok {
+                if u.MaxWallTimePod == 0 {
+                        u.MaxWallTimePod = c.UserDefault.MaxWallTimePod
+                }
                 if u.MaxWallTime == 0 {
                         u.MaxWallTime = c.UserDefault.MaxWallTime
                 }

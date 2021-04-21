@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	//"reflect"
 	//"strings"
 
 	"github.com/golang/glog"
@@ -153,7 +154,7 @@ func CreatePatch(contI MyConIntf, uid int64, gids []int64, username string, user
 	//patch = append(patch, updateAnnotation(pod.Annotations, annotations)...)
 	patch = append(patch, updateSecurityContext(contI, uid, gids)...)
 	patch = append(patch, updateLabel(contI, username)...)
-	//patch = append(patch, updateDeadline(username)...)
+	patch = append(patch, updateDeadline(contI, usercfg)...)
 
 	return json.Marshal(patch)
 }
@@ -211,36 +212,38 @@ func updateLabel(contI MyConIntf, username string) (patch []patchOperation) {
 	return patch
 }
 
-/*
-func updateDeadline(username string) (patch []patchOperation) {
-//func updateDeadline1(areq *v1beta1.AdmissionRequest) (patch []patchOperation) {
-        var path string
-        //k8s.io/apimachinery/pkg/apis/meta/v1/group_version.go
-        path = "/spec/"
-        var m *map[string]int64
-        var wtime int64 = 0
-        m, err := loadwtConfig("/etc/admissionConfig/wtconfig")
-        if err != nil {
-                glog.Infof("error loading walltime config: %v", err)
-        } else {
-                //glog.Infof("walltime config: %v", *m)
-                if val, ok := (*m)[username]; ok {
-                        glog.Infof("walltime is : %v", val)
-                        wtime = val
-                } else if val, ok := (*m)["default"]; ok {
-                        wtime = val
-                }
-        }
+//*
+func updateDeadline(contI MyConIntf, usercfg UserCfg) (patch []patchOperation) {
 
-        if wtime != 0 {
+	//xType := reflect.TypeOf(coninf)
+	//xValue := reflect.ValueOf(coninf)
+	//glog.Infof("type: %v", xType)
+	//apply a different walltime limit when user creates pod directly
+	var maxWallTime int64
+	if _, ok := contI.(MyPod); ok {
+		maxWallTime = usercfg.MaxWallTimePod
+	} else {
+		maxWallTime = usercfg.MaxWallTime
+	}
+
+	if maxWallTime == 0 {
+		return nil
+	}
+        for path, _ := range contI.GetPodSpecs() {
+
                 patch = append(patch, patchOperation{
                                 Op:    "add",
                                 Path:  path + "activeDeadlineSeconds",
-                                Value: wtime,
+                                Value: maxWallTime,
+                })
+                patch = append(patch, patchOperation{
+                                Op:    "add",
+                                Path:  path + "restartPolicy",
+                                Value: "Never",
                 })
         }
 
         return patch
 }
 
-*/
+//*/

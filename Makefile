@@ -18,7 +18,7 @@ TESTARGS_DEFAULT := "-v"
 export TESTARGS ?= $(TESTARGS_DEFAULT)
 DEST := $(GOPATH)/src/$(GIT_HOST)/$(BASE_DIR)
 #IMAGE_TAG ?= $(shell date +v%Y%m%d)-$(shell git describe --match=$(git rev-parse --short=8 HEAD) --tags --always --dirty)
-IMAGE_TAG=v3.4
+IMAGE_TAG=v3.5
 
 LOCAL_OS := $(shell uname)
 ifeq ($(LOCAL_OS),Linux)
