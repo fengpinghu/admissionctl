@@ -9,8 +9,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"strings"
 	//"reflect"
-	//"strings"
 
 	"github.com/golang/glog"
 	"k8s.io/api/admission/v1beta1"
@@ -164,7 +164,7 @@ func updateSecurityContext(contI MyConIntf,
 	uid int64,
 	gids []int64) (patch []patchOperation) {
 
-	glog.Infof("template path:\n")
+	//glog.Infof("template path:\n")
 	for _, tp_path := range contI.GetTemplates() {
 		glog.Infof(tp_path)
 		patch = append(patch, patchOperation{
@@ -197,18 +197,63 @@ func updateSecurityContext(contI MyConIntf,
 func updateLabel(contI MyConIntf, username string) (patch []patchOperation) {
 	//var path string
 	//k8s.io/apimachinery/pkg/apis/meta/v1/group_version.go
+	var labels map[string]string
+	if mydep, ok := contI.(MyDeployment); ok {
+		//glog.Infof("mydeployment: %v", mydep)
+		labels = mydep.Spec.Template.Labels
+	} else if myjob, ok := contI.(MybJob); ok {
+		labels = myjob.Spec.Template.Labels
+	} else if mypod, ok := contI.(MyPod); ok {
+		labels = mypod.Labels
+	}
+
+	for path, _ := range contI.GetPodSpecs() {
+
+		//glog.Infof("path:%v, spec: %v", path, spec)
+		tp_path := strings.TrimSuffix(path,"spec/")
+		//glog.Infof(tp_path)
+		if labels == nil {
+			patch = append(patch, patchOperation{
+				Op:   "add",
+				Path: tp_path + "metadata/" + "labels",
+				Value: map[string]string{
+					"user": username,
+				},
+			})
+		} else {
+                        patch = append(patch, patchOperation{
+                                Op:    "add",
+                                Path:  tp_path + "metadata/labels/user",
+                                Value: username,
+                        })
+		}
+	}
+	/*
+	for _, tp_path := range contI.GetTemplates() {
+		glog.Infof("tp_path:%v", tp_path)
+	}
 
 	glog.Infof("template path:\n")
+	
 	for _, tp_path := range contI.GetTemplates() {
 		glog.Infof(tp_path)
-		patch = append(patch, patchOperation{
-			Op:   "add",
-			Path: tp_path + "metadata/" + "labels",
-			Value: map[string]string{
-				"user": username,
-			},
-		})
+		if labels == nil {
+			patch = append(patch, patchOperation{
+				Op:   "add",
+				Path: tp_path + "metadata/" + "labels",
+				Value: map[string]string{
+					"user": username,
+				},
+			})
+		} else {
+                        patch = append(patch, patchOperation{
+                                Op:    "add",
+                                Path:  tp_path + "metadata/labels/user",
+                                Value: username,
+                        })
+		}
 	}
+	*/
 	return patch
 }
 
